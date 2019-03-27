@@ -1,0 +1,57 @@
+#!/usr/bin/env python3.7
+
+import tailer
+import re
+import subprocess
+import os
+from subprocess import *
+import time
+
+"""
+Simple UFW manager
+"""
+
+# Ensure UFW is up and running
+ufwStatus = (subprocess.check_output(['ufw', 'status'])).decode()
+statusMatch = re.search("Status: active", ufwStatus)
+if not statusMatch:
+        subprocess.run(['ufw', 'enable'])
+        ufwStatus = (subprocess.check_output(['ufw', 'status'])).decode()
+        statusMatch = re.search("Status: active", ufwStatus)
+        if not statusMatch:
+                print("UFW not enabled")
+                exit()
+# Tail Apache access log
+lastLine = tailer.follow(open('/var/log/httpd/access_log'))
+# Get ip from line and test for malicious matches
+for line in lastLine:
+        ip = re.match("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", line).group()
+        matchPHP, matchSQL, match404 = re.search("php", line, re.IGNORECASE), re.search("sql", line, re.IGNORECASE), re.search("\s404\s", line)
+        if (matchPHP and match404) or (matchSQL and match404):
+# If matched then send UFW call to ban ip
+            subprocess.run(['ufw', 'deny', 'from', ip])
+# Fork child process to start timer and unban ip after
+            try:
+                pid = os.fork()
+            except OSError:
+                exit("Could not create child process")
+            if pid == 0:
+                childIP = ip
+                # Wait {N} seconds
+                time.sleep(30)
+                # Get UFW rules
+                cmd = ['ufw', 'status', 'numbered']
+                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+                p2 = subprocess.Popen(['awk', '{ print $6; }'], stdin=p1.stdout, stdout=subprocess.PIPE)
+                output = (p2.communicate()[0]).decode()
+                #Create list of rules
+                ruleList = []
+                for line in output.split('\n'):
+                    ruleList.append(line)
+                ruleList = list(filter(None, ruleList))
+                # Match banned ip in list to currently awaiting unban ip
+                ipID = str(ruleList.index(childIP) + 1)
+                # Send call to UFW to delete ban
+                delRule = Popen(['sudo', 'ufw', 'delete', ipID], stdin=PIPE, stdout=PIPE)
+                delRule.communicate(input=b'y\n')
+                exit()

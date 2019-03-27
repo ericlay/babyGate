@@ -1,0 +1,12 @@
+[Unit]
+Description=BabyGate
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart= /PATH/TO/YOUR/SCRIPT
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
