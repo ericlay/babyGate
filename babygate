@@ -38,7 +38,7 @@ for line in lastLine:
             if pid == 0:
                 childIP = ip
                 # Wait {N} seconds
-                time.sleep(30)
+                time.sleep(7200)
                 # Get UFW rules
                 cmd = ['ufw', 'status', 'numbered']
                 p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE)
